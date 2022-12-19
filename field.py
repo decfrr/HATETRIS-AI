@@ -27,6 +27,13 @@ class Field:
         for _ in range(20):
             self.tiles.insert(0, copy.deepcopy(self.EMPTY_LINE))
 
+    def clone(self):
+        """ 自分自身のコピーを返す
+
+        :return: 自分自身のコピー
+        """
+        return copy.deepcopy(self)
+
     def get_tile(self, x, y):
         """ 指定のタイルのブロック状況を返す
 
@@ -34,7 +41,10 @@ class Field:
         :param y: y座標
         :return: 与えられた座標にセットされている盤面の値
         """
-        return self.tiles[y][x]
+        try:
+            return self.tiles[y][x]
+        except IndexError:
+            return 9
 
     def set_blocks(self, blocks):
         """ ブロックを盤面に確定反映する
@@ -43,7 +53,11 @@ class Field:
         :return:
         """
         for block in blocks:
-            self.tiles[block.y][block.x] = block.c
+            try:
+                self.tiles[block.y][block.x] = block.c
+            except IndexError:
+                pass
+        return self
 
     def line_erase(self):
         """ 埋まった行があればそれを消す関数
@@ -63,6 +77,21 @@ class Field:
             self.tiles.pop(i)  # そのラインを取り除く
             self.tiles.insert(0, copy.deepcopy(self.EMPTY_LINE))  # 最上部に新たなラインを追加する
         return len(erase)
+
+    def next_field(self, candidate_blocks):
+        """ 次の盤面を返す関数
+
+        :param: candidate_blocks: 次に置くブロックの候補
+        :return: 次の盤面
+        """
+        next_field = copy.deepcopy(self)
+        next_field.set_blocks(candidate_blocks)
+        # y = 3にブロックがある場合はゲームオーバー
+        for i in range(1, 11):
+            if next_field.tiles[3][i] != -1:
+                return False, 0
+        score = next_field.line_erase()
+        return next_field, score
 
     def draw(self, screen, colors):
         """ 画面に盤面を描画する
@@ -127,8 +156,8 @@ class Field:
         num_pits = np.count_nonzero(np.count_nonzero(area, axis=0) == 0)
 
         wells = self.get_wells(peaks)
-        max_wells = np.max(wells)
-
+        # max_wells = peaks[np.argmin(wells)]
+        max_wells = highest_peak
         cleard = area.min(axis=1).sum()
 
         return np.array([agg_height, n_holes, n_cols_with_holes,

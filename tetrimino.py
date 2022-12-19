@@ -31,25 +31,25 @@ class Tetrimino:
         self.s = 0
         if t == 0:
             # 0 (四角)の形のブロック
-            self.shape = [Block(-1, -1, t), Block(-1, 0, t), Block(0, 0, t), Block(0, -1, t)]
+            self.shape = [Block(0, -1, t), Block(0, 0, t), Block(1, 0, t), Block(1, -1, t)]
         if t == 1:
             # I の形のブロック
-            self.shape = [Block(-2, 0, t), Block(-1, 0, t), Block(0, 0, t), Block(1, 0, t)]
+            self.shape = [Block(-1, -1, t), Block(0, -1, t), Block(1, -1, t), Block(2, -1, t)]
         if t == 2:
             # S の形のブロック
-            self.shape = [Block(-1, 0, t), Block(0, 0, t), Block(0, -1, t), Block(1, -1, t)]
+            self.shape = [Block(0, 0, t), Block(1, 0, t), Block(1, -1, t), Block(2, -1, t)]
         if t == 3:
             # Z の形のブロック
-            self.shape = [Block(-1, -1, t), Block(0, -1, t), Block(0, 0, t), Block(1, 0, t)]
+            self.shape = [Block(0, -1, t), Block(1, -1, t), Block(1, 0, t), Block(2, 0, t)]
         if t == 4:
             # J の形のブロック
-            self.shape = [Block(0, -2, t), Block(0, -1, t), Block(-1, 0, t), Block(0, 0, t)]
+            self.shape = [Block(0, -1, t), Block(0, 0, t), Block(1, -1, t), Block(0, 1, t)]
         if t == 5:
             # L の形のブロック
-            self.shape = [Block(-1, -2, t), Block(-1, -1, t), Block(-1, 0, t), Block(0, 0, t)]  # L
+            self.shape = [Block(2, -1, t), Block(0, -1, t), Block(0, 0, t), Block(1, -1, t)]  # L
         if t == 6:
             # T の形のブロック
-            self.shape = [Block(-1, 0, t), Block(0, 0, t), Block(0, -1, t), Block(1, 0, t)]     # T
+            self.shape = [Block(1, -1, t), Block(2, -1, t), Block(0, -1, t), Block(1, 0, t)]     # T
 
         for _ in range(r%4):
             for b in self.shape:
@@ -57,6 +57,9 @@ class Tetrimino:
 
         for b in self.shape:
             b.move(x, y)
+
+    def __hash__(self):
+        return (self.x * 23 + self.y) * 4 + self.r % 4
 
     def get_blocks(self):
         """ 現在のブロック4つを返す
@@ -120,4 +123,31 @@ class Tetrimino:
         :param dr: r回転値
         :return: インスタンスから指定の移動回転を行った後のTetriminoオブジェクト
         """
+        # 回転動作が含まれるとき
+        if dr != 0:
+            if self.t == 0:  # O
+                # 回転しないで返す
+                dr = 0
+            elif self.t == 1 or 2 or 3:  # I, S, Z
+                if (self.r + 1) % 4 == 1:
+                    dy -= 1
+                elif (self.r + 1) % 4 == 2:
+                    dx += 1
+                elif (self.r + 1) % 4 == 3:
+                    dy += 1
+                elif (self.r + 1) % 4 == 0:
+                    dx -= 1
+            elif self.t == 4 or 5 or 6:  # J, L, T
+                if (self.r + 1) % 4 == 1:
+                    dx += 1
+                    dy -= 1
+                elif (self.r + 1) % 4 == 2:
+                    dx += 1
+                    dy += 1
+                elif (self.r + 1) % 4 == 3:
+                    dx -= 1
+                    dy += 1
+                elif (self.r + 1) % 4 == 0:
+                    dx -= 1
+                    dy -= 1
         return Tetrimino(self.x+dx, self.y+dy, self.r+dr, self.t)

@@ -1,16 +1,51 @@
+from typing import List
+
 import pygame
 import numpy as np
 from population import Population
 from field import Field
 from play import make_colors, generate_tetrimino
+from hatetris import Hatetris
+from replay_codecs.codec import encode
+
+from tetrimino import Tetrimino
 
 
-def get_candidate_list(init_mino, field):
+class TetriminoWay(Tetrimino):
+    """
+    テトリミノに移動方法を追加したクラス
+    """
+
+    def __init__(self, x, y, r, t, way: List[str]):
+        super().__init__(x, y, r, t)
+        self.way = [] if way is None else way
+
+    def get_moves(self):
+        return self.way
+
+    def clone(self, dx=0, dy=0, dr=0, way=None):
+        """ 指定の移動を行った後のクローンを生成する
+        :param dx: x移動値
+        :param dy: y移動値
+        :param dr: r回転値
+        :param way: 入力キーのリスト
+        :return TetriminoWay: インスタンスから指定の移動回転を行った後のTetriminoオブジェクト
+        """
+        mino = super().clone(dx, dy, dr)
+        if way is not None:
+            w = self.way.copy()
+            w.extend(way)
+        else:
+            w = self.way
+        return TetriminoWay(mino.x, mino.y, mino.r, mino.t, w)
+
+
+def get_candidate_list(init_mino: Tetrimino, field: Field) -> List[TetriminoWay]:
     """ 盤面の状況を踏まえて落下可能なテトリミノ候補をすべて返す
 
-    :param init_mino: 与えられたテトリミノ
+    :param init_mino: 初期テトリミノ
     :param field: 盤面
-    :return: 落下可能な位置にあるテトリミノ配列 (落下の高さに応じてscore値をセットする)
+    :return: TetriminoWayのリスト
     """
     candidate = []
     rotete_num = 1
@@ -24,11 +59,14 @@ def get_candidate_list(init_mino, field):
 
     # 各回転パターンに応じて
     for i in range(rotete_num):
-        mino = init_mino.clone(0, 0, i)
+        # if mino_type == 1:
+        #     i = 1
+        l = ['U' for _ in range(i)]
+        mino = TetriminoWay(init_mino.x, init_mino.y, init_mino.r + i, init_mino.t, l)
 
         # まずは最も左に寄せる
         while True:
-            next_mino = mino.clone(-1, 0, 0)
+            next_mino = mino.clone(-1, 0, 0, ['L'])
             if next_mino.collision(field):
                 break
             mino = next_mino
@@ -39,7 +77,7 @@ def get_candidate_list(init_mino, field):
             score = 0
             while True:
                 # 可能なところまで落下させる
-                next_mino = mino.clone(0, 1, 0)
+                next_mino = mino.clone(0, 1, 0, ['D'])
                 if next_mino.collision(field):
                     break
                 mino = next_mino
@@ -48,11 +86,62 @@ def get_candidate_list(init_mino, field):
             candidate.append(mino)
 
             # １つづつ右に移動させる
-            next_mino = base_mino.clone(1, 0, 0)
+            next_mino = base_mino.clone(1, 0, 0, ['R'])
             if next_mino.collision(field):
                 break
             base_mino = next_mino
     return candidate
+
+
+
+# def get_candidate_list(init_mino, field):
+#     """ 盤面の状況を踏まえて落下可能なテトリミノ候補をすべて返す
+#
+#     :param init_mino: 与えられたテトリミノ
+#     :param field: 盤面
+#     :return: 落下可能な位置にあるテトリミノ配列 (落下の高さに応じてscore値をセットする)
+#     """
+#     candidate = []
+#     rotete_num = 1
+#     mino_type = init_mino.get_type()
+#
+#     # タイプによって回転のバリエーションが2 or 4 となる
+#     if 1 <= mino_type <= 3:
+#         rotete_num = 2
+#     if mino_type >= 4:
+#         rotete_num = 4
+#
+#     # 各回転パターンに応じて
+#     for i in range(rotete_num):
+#         mino = init_mino.clone(0, 0, i)
+#
+#         # まずは最も左に寄せる
+#         while True:
+#             next_mino = mino.clone(-1, 0, 0)
+#             if next_mino.collision(field):
+#                 break
+#             mino = next_mino
+#         base_mino = mino
+#
+#         while True:
+#             mino = base_mino
+#             score = 0
+#             while True:
+#                 # 可能なところまで落下させる
+#                 next_mino = mino.clone(0, 1, 0)
+#                 if next_mino.collision(field):
+#                     break
+#                 mino = next_mino
+#                 score += 1
+#             mino.set_score(score)
+#             candidate.append(mino)
+#
+#             # １つづつ右に移動させる
+#             next_mino = base_mino.clone(1, 0, 0)
+#             if next_mino.collision(field):
+#                 break
+#             base_mino = next_mino
+#     return candidate
 
 
 def get_next(model, mino, field):
@@ -86,13 +175,19 @@ def eval_network(model):
     :return: 3回プレイしたスコアの平均値
     """
     scores = []
+    hatetris = Hatetris()
     for i in range(3):
         field = Field()
         i += 1
         score = 0
         while True:
-            mino = generate_tetrimino()
-            if mino.collision(field):
+            has_block = False
+            for x in range(1, 11):
+                if field.get_tile(x, 3) != -1:
+                    has_block = True
+                    break
+            mino = hatetris.generate_worst_tetrimino(field)
+            if mino.collision(field) or has_block:
                 break
             best_mino = get_next(model, mino, field)
             field.set_blocks(best_mino.get_blocks())
@@ -119,6 +214,8 @@ def preview_ai(model):
     font = pygame.font.SysFont("Arial", 40)
 
     field = Field()
+    hatetris = Hatetris()
+    moves = []
 
     score = 0
     erase_line = 0
@@ -128,11 +225,19 @@ def preview_ai(model):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 return
+        has_block = False
+        for x in range(1, 11):
+            if field.get_tile(x, 3) != -1:
+                has_block = True
+                break
+        if has_block:
+            game_over_flag = True
         if game_over_flag:
+            print(encode(moves))
             return score, erase_line
 
         # ランダムにテトリミノを生成する
-        mino = generate_tetrimino()
+        mino = hatetris.generate_worst_tetrimino(field)
         screen.fill((0, 0, 0))
 
         screen.blit(font.render("score: {}".format(score), True, (255, 255, 255)), (300, 100))
@@ -163,7 +268,8 @@ def preview_ai(model):
             erase_line += erase
         else:
             clock.tick(30)
-
+        moves.extend(mino.get_moves())
+        moves.append('D')
         score += mino.get_score()
 
 
